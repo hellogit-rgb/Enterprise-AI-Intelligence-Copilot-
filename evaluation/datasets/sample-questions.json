@@ -1,0 +1,20 @@
+[
+  {
+    "question": "What is Customer A's payment period?",
+    "expected_answer": "30 days",
+    "expected_sources": ["Customer_A_Contract.pdf"],
+    "category": "document"
+  },
+  {
+    "question": "Which five customers generated the highest revenue?",
+    "expected_answer": "Top 5 by total revenue",
+    "expected_sources": ["sales_data"],
+    "category": "sql"
+  },
+  {
+    "question": "Compare Customer A's payment terms with the standard company policy.",
+    "expected_answer": "Compare clause and policy terms",
+    "expected_sources": ["Customer_A_Contract.pdf", "Payment_Policy.pdf"],
+    "category": "comparison"
+  }
+]
