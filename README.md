@@ -49,6 +49,27 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+### Verification
+
+```bash
+cd ai-service
+python -m unittest discover -s tests -v
+
+cd ../backend
+npm test
+
+cd ../frontend
+npm run build
+```
+
+## Security and uploads
+
+The backend supports configurable JWT authentication and request rate limiting.
+Set `REQUIRE_AUTH=true` and provide a strong `JWT_SECRET` outside local development.
+Text and PDF documents can be uploaded through the dashboard or the backend file
+endpoint. Uploaded documents are persisted locally, chunked with page metadata,
+and filtered by their allowed roles before retrieval.
+
 ## Current status
 
 This repository is now scaffolded with the foundational frontend and service layers needed for the first phase of the project. The next steps are to add:

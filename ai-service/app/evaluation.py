@@ -1,4 +1,17 @@
+import json
+from pathlib import Path
 from typing import List, Dict, Any
+
+
+def load_sample_dataset() -> List[Dict[str, Any]]:
+    candidates = [
+        Path(__file__).resolve().parents[2] / 'evaluation' / 'datasets' / 'sample-questions.json',
+        Path(__file__).resolve().parents[1] / 'datasets' / 'sample-questions.json',
+    ]
+
+    dataset_path = next((path for path in candidates if path.exists()), candidates[0])
+    with dataset_path.open('r', encoding='utf-8') as handle:
+        return json.load(handle)
 
 
 class EvaluationEngine:
@@ -12,7 +25,8 @@ class EvaluationEngine:
                 'question': item['question'],
                 'expected_answer': item.get('expected_answer', ''),
                 'category': item.get('category', 'general'),
-                'pass': True
+                'pass': True,
+                'expected_sources': item.get('expected_sources', [])
             })
 
         accuracy = round((sum(1 for r in results if r['pass']) / max(len(results), 1)) * 100, 2)

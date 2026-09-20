@@ -15,9 +15,23 @@ const sampleQuestions = [
   'Which customers have overdue payments?'
 ]
 
+function encodeBase64(buffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  }
+  return btoa(binary)
+}
+
 function App() {
   const [metrics, setMetrics] = useState(defaultMetrics)
+  const [evaluation, setEvaluation] = useState({ total_questions: 3, accuracy: 100 })
   const [question, setQuestion] = useState('What were Q2 revenues for Customer A?')
+  const [documentName, setDocumentName] = useState('')
+  const [documentText, setDocumentText] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploadState, setUploadState] = useState('')
   const [response, setResponse] = useState({
     answer: 'Customer A generated ₹42.8 lakh in Q2. The result was validated against the sales database and the financial report.',
     sources: [
@@ -26,6 +40,7 @@ function App() {
     ],
     confidence: 96,
     verification: 'passed',
+    needsReview: false,
     toolUsed: 'SQLQueryTool'
   })
 
@@ -42,6 +57,10 @@ function App() {
             { label: 'Review Needed', value: String(data.metrics.reviewNeeded) }
           ])
         }
+
+        if (data?.evaluation) {
+          setEvaluation(data.evaluation)
+        }
       })
       .catch(() => {})
   }, [])
@@ -57,10 +76,44 @@ function App() {
         sources: [],
         confidence: 0,
         verification: 'pending',
+        needsReview: true,
         toolUsed: 'Offline mode'
       }))
 
     setResponse(result)
+  }
+
+  const handleUpload = async (event) => {
+    event.preventDefault()
+    setUploadState('Uploading...')
+
+    const request = selectedFile
+      ? selectedFile.arrayBuffer().then((buffer) => fetch('http://localhost:4000/api/documents/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: selectedFile.name,
+          content_base64: encodeBase64(buffer),
+          section: 'Uploaded Document'
+        })
+      }))
+      : fetch('http://localhost:4000/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: documentName, text: documentText, section: 'Uploaded Document' })
+      })
+
+    const result = await request.then((res) => res.json())
+      .catch(() => ({ ok: false, error: 'Backend unavailable' }))
+
+    if (result.ok) {
+      setUploadState(`Ingested ${result.count} chunk${result.count === 1 ? '' : 's'}`)
+      setDocumentName('')
+      setDocumentText('')
+      setSelectedFile(null)
+    } else {
+      setUploadState(result.error || 'Upload failed')
+    }
   }
 
   return (
@@ -101,6 +154,38 @@ function App() {
           ))}
         </section>
 
+        <section className="upload-panel">
+          <div>
+            <p className="eyebrow">Knowledge base</p>
+            <h2>Add a text document</h2>
+          </div>
+          <form className="upload-form" onSubmit={handleUpload}>
+            <input
+              type="text"
+              value={documentName}
+              onChange={(event) => setDocumentName(event.target.value)}
+              placeholder="Document name"
+              required={!selectedFile}
+            />
+            <input
+              type="file"
+              accept=".txt,.md,.csv,.json,.pdf"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+            />
+            <textarea
+              value={documentText}
+              onChange={(event) => setDocumentText(event.target.value)}
+              placeholder="Paste document content"
+              rows="4"
+              required={!selectedFile}
+            />
+            <div className="upload-actions">
+              <button className="primary-btn" type="submit">Ingest document</button>
+              {uploadState && <span className="upload-status">{uploadState}</span>}
+            </div>
+          </form>
+        </section>
+
         <section className="chat-panel">
           <div className="chat-header">
             <div>
@@ -137,6 +222,25 @@ function App() {
               <div>
                 <label>Citation Verification</label>
                 <strong>{response.verification}</strong>
+              </div>
+              <div>
+                <label>Answer Review</label>
+                <strong>{response.needsReview ? 'Required' : 'Clear'}</strong>
+              </div>
+            </div>
+
+            <div className="meta-grid" style={{ marginTop: '1rem' }}>
+              <div>
+                <label>Evaluation Accuracy</label>
+                <strong>{evaluation.accuracy}%</strong>
+              </div>
+              <div>
+                <label>Questions</label>
+                <strong>{evaluation.total_questions}</strong>
+              </div>
+              <div>
+                <label>Review State</label>
+                <strong>{evaluation.accuracy >= 90 ? 'Stable' : 'Needs Review'}</strong>
               </div>
             </div>
           </div>

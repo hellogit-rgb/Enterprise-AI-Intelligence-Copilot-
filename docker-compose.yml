@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   frontend:
     build:
@@ -16,7 +15,8 @@ services:
 
   ai-service:
     build:
-      context: ./ai-service
+      context: .
+      dockerfile: ai-service/Dockerfile
     ports:
       - '8000:8000'
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

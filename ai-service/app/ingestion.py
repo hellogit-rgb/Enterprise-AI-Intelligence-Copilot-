@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import io
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
@@ -12,6 +16,7 @@ class DocumentChunk:
     section: str
     chunk_id: str
     text: str
+    allowed_roles: Optional[List[str]] = None
 
     @property
     def content(self) -> str:
@@ -26,6 +31,7 @@ class DocumentChunk:
             'content': self.text,
             'document_id': self.document_id,
             'chunk_id': self.chunk_id,
+            'allowed_roles': self.allowed_roles or [],
         }
 
 
@@ -35,7 +41,9 @@ class DocumentIngestionPipeline:
 
     @staticmethod
     def chunk_text(text: str, max_chars: int = 500, overlap: int = 80) -> List[str]:
-        cleaned = ' '.join(text.split())
+        cleaned = ' '.join((text or '').split())
+        if not cleaned:
+            return []
         if len(cleaned) <= max_chars:
             return [cleaned]
 
@@ -60,20 +68,74 @@ class DocumentIngestionPipeline:
     def build_chunks(self) -> List[DocumentChunk]:
         chunks: List[DocumentChunk] = []
         for document in self.documents:
-            for page_number, page_text in document.get('pages', []):
-                section = document.get('section', 'General')
-                page_chunks = self.chunk_text(page_text)
-                for index, chunk_text in enumerate(page_chunks):
-                    chunk = DocumentChunk(
-                        document_id=document['id'],
-                        document_name=document['name'],
-                        page=page_number,
-                        section=section,
-                        chunk_id=f"{document['id']}_chunk_{index + 1}",
-                        text=chunk_text,
-                    )
-                    chunks.append(chunk)
+            pages = document.get('pages')
+            if pages:
+                for page_number, page_text in pages:
+                    section = document.get('section', 'General')
+                    page_chunks = self.chunk_text(page_text)
+                    for index, chunk_text in enumerate(page_chunks):
+                        chunk = DocumentChunk(
+                            document_id=document['id'],
+                            document_name=document['name'],
+                            page=page_number,
+                            section=section,
+                            chunk_id=f"{document['id']}_chunk_{index + 1}",
+                            text=chunk_text,
+                            allowed_roles=document.get('allowed_roles'),
+                        )
+                        chunks.append(chunk)
+                continue
+
+            raw_text = document.get('text', '')
+            section = document.get('section', 'General')
+            page_chunks = self.chunk_text(raw_text)
+            for index, chunk_text in enumerate(page_chunks):
+                chunk = DocumentChunk(
+                    document_id=document['id'],
+                    document_name=document['name'],
+                    page=1,
+                    section=section,
+                    chunk_id=f"{document['id']}_chunk_{index + 1}",
+                    text=chunk_text,
+                    allowed_roles=document.get('allowed_roles'),
+                )
+                chunks.append(chunk)
         return chunks
+
+
+def ingest_documents(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    pipeline = DocumentIngestionPipeline(documents)
+    return [chunk.to_retrieval_dict() for chunk in pipeline.build_chunks()]
+
+
+def document_from_file(name: str, content_base64: str, section: str = 'General') -> Dict[str, Any]:
+    extension = Path(name).suffix.lower()
+    if extension not in {'.txt', '.md', '.csv', '.json', '.pdf'}:
+        raise ValueError('Only text, markdown, CSV, JSON, and PDF files are supported.')
+
+    try:
+        file_bytes = base64.b64decode(content_base64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError('File content must be valid base64.') from exc
+
+    document = {'name': name, 'section': section}
+    if extension == '.pdf':
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(file_bytes))
+            document['pages'] = [
+                (page_number, page.extract_text() or '')
+                for page_number, page in enumerate(reader.pages, start=1)
+            ]
+        except Exception as exc:
+            raise ValueError('The PDF could not be read.') from exc
+    else:
+        try:
+            document['text'] = file_bytes.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            raise ValueError('Text files must use UTF-8 encoding.') from exc
+
+    return document
 
 
 def build_sample_documents() -> List[Dict[str, Any]]:

@@ -11,8 +11,10 @@ class DocumentSearchTool:
 
 
 class SQLQueryTool:
-    def __init__(self, allowed_tables=None):
+    def __init__(self, allowed_tables=None, allowed_columns=None, max_rows=100):
         self.allowed_tables = allowed_tables or {'customers', 'sales', 'transactions', 'orders'}
+        self.allowed_columns = allowed_columns or {}
+        self.max_rows = max_rows
 
     def validate(self, query: str) -> bool:
         if not query or not isinstance(query, str):
@@ -20,6 +22,8 @@ class SQLQueryTool:
 
         normalized = query.strip()
         if not normalized:
+            return False
+        if ';' in normalized.rstrip(';'):
             return False
 
         prohibited = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT', 'REVOKE']
@@ -41,6 +45,19 @@ class SQLQueryTool:
             if table.lower() not in {name.lower() for name in self.allowed_tables}:
                 return False
 
+        if self.allowed_columns:
+            select_match = re.search(r'\bSELECT\s+(.*?)\s+FROM\b', normalized, flags=re.IGNORECASE | re.DOTALL)
+            if not select_match:
+                return False
+            selected_columns = [column.strip().split()[-1].lower() for column in select_match.group(1).split(',')]
+            for table in discovered_tables:
+                allowed = {column.lower() for column in self.allowed_columns.get(table, set())}
+                if '*' in selected_columns:
+                    if not allowed:
+                        return False
+                elif any(column not in allowed for column in selected_columns):
+                    return False
+
         return True
 
     def execute(self, query: str):
@@ -51,7 +68,8 @@ class SQLQueryTool:
             'rows': [
                 {'customer_name': 'Customer A', 'total_revenue': 4280000},
                 {'customer_name': 'Customer B', 'total_revenue': 3560000}
-            ]
+            ][:self.max_rows],
+            'row_limit': self.max_rows
         }
 
 

@@ -31,6 +31,7 @@ class HybridRetriever:
                 'page': doc.get('page', 1),
                 'section': doc.get('section', 'General'),
                 'content': doc['content'],
+                'allowed_roles': doc.get('allowed_roles', []),
                 'score': float(hybrid_score)
             })
 
