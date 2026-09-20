@@ -70,6 +70,10 @@ Text and PDF documents can be uploaded through the dashboard or the backend file
 endpoint. Uploaded documents are persisted locally, chunked with page metadata,
 and filtered by their allowed roles before retrieval.
 
+Answer generation is free by default and uses deterministic evidence grounding.
+For fully local natural-language generation, install Ollama and set `OLLAMA_MODEL`
+to a downloaded local model; no paid API key is required.
+
 ## Current status
 
 This repository is now scaffolded with the foundational frontend and service layers needed for the first phase of the project. The next steps are to add:
